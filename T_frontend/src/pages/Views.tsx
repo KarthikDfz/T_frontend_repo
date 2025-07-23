@@ -54,7 +54,7 @@ const ViewCard: React.FC<ViewCardProps> = ({ view }) => {
   };
 
   return (
-    <Card className="group hover:shadow-lg transition-all duration-200 hover:border-primary/20 cursor-pointer">
+    <Card className="group hover:shadow-lg transition-all duration-200">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3 flex-1">
@@ -65,69 +65,30 @@ const ViewCard: React.FC<ViewCardProps> = ({ view }) => {
               {viewType === 'dashboard' && <PanelTop className="h-4 w-4" />}
             </div>
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors truncate">
+              <CardTitle className="text-base font-semibold truncate">
                 {view.name}
               </CardTitle>
               <CardDescription className="text-xs mt-1">
-                View ID: {view.id.substring(0, 12)}...
+                ID: {view.id.substring(0, 8)}...
               </CardDescription>
             </div>
           </div>
-          <Badge variant="outline" className={`text-xs ${getTypeColor(viewType)} border-current`}>
-            {viewType.charAt(0).toUpperCase() + viewType.slice(1)}
-          </Badge>
+          {/* Add view type badge here */}
         </div>
       </CardHeader>
-      <CardContent className="pb-3">
-        <div className="w-full aspect-video bg-gradient-to-br from-muted/30 to-muted/60 rounded-lg flex items-center justify-center border border-muted relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-transparent to-primary/5"></div>
-          <div className="text-center relative z-10">
-            <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-primary/10 flex items-center justify-center">
-              {viewType === 'chart' && <PanelTop className="h-6 w-6 text-primary" />}
-              {viewType === 'table' && <Layers className="h-6 w-6 text-primary" />}
-              {viewType === 'map' && <FileText className="h-6 w-6 text-primary" />}
-              {viewType === 'dashboard' && <PanelTop className="h-6 w-6 text-primary" />}
-            </div>
-            <p className="text-sm font-medium text-muted-foreground">Tableau View</p>
-            {view.content_url && (
-              <p className="text-xs text-muted-foreground mt-1 opacity-75 truncate max-w-[200px] mx-auto">
-                {view.content_url}
-              </p>
-            )}
-          </div>
-        </div>
+      <CardContent>
+        {/* ...existing content... */}
       </CardContent>
-      <CardFooter className="flex justify-between pt-0">
-        <Button variant="outline" size="sm" className="group-hover:border-primary group-hover:text-primary transition-colors">
+      <CardFooter className="flex justify-between">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => window.open(`/tableau/view/${view.id}`, '_blank')}
+        >
           <FileText className="h-3 w-3 mr-1" />
-          View Details
+          Open View
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="group-hover:bg-primary/5 transition-colors">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem className="cursor-pointer">
-              <PanelTop className="h-4 w-4 mr-2" />
-              Open in Tableau
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer">
-              <Download className="h-4 w-4 mr-2" />
-              Export View
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Migrate to Power BI
-            </DropdownMenuItem>
-            <Separator />
-            <DropdownMenuItem className="text-destructive cursor-pointer">
-              <AlertCircle className="h-4 w-4 mr-2" />
-              Report Issue
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* ...existing footer content... */}
       </CardFooter>
     </Card>
   );
@@ -243,84 +204,20 @@ const ViewsPage: React.FC = () => {
     }
     
     const fetchViews = async () => {
-      console.log('Starting fetchViews for workbook:', workbookToUse);
-      
+      setIsLoading(true);
       try {
-        // Immediately clear existing views to prevent stale data
-        setViews([]);
+        if (!workbookToUse?.id) {
+          throw new Error('No workbook selected');
+        }
+        const views = await apiService.getWorkbookViews(workbookToUse.id);
+        setViews(views);
         setError(null);
-        
-        // Check if we have a site name for authentication
-        const siteName = getSiteName();
-        if (!siteName) {
-          console.log('No site name found, setting auth error');
-          setError('No Tableau site is selected. Please authenticate first.');
-          setViews([]); // Ensure views are empty
-          setIsLoading(false);
-          return;
-        }
-        
-        let viewsData: View[] = [];
-        
-        if (workbookToUse && workbookToUse.id) {
-          console.log(`Fetching views for workbook ${workbookToUse.id}: ${workbookToUse.name}`);
-          
-          // Fetch views for the selected workbook
-          viewsData = await apiService.getWorkbookViews(workbookToUse.id);
-          console.log('API Response - Fetched views for workbook:', viewsData);
-          console.log('Number of views received:', viewsData.length);
-          
-          // Show appropriate toast message
-          if (viewsData.length > 0) {
-            toast({
-              title: "Views Loaded",
-              description: `Successfully loaded ${viewsData.length} views from workbook: ${workbookToUse.name}`
-            });
-          } else {
-            console.log('No views found for workbook');
-            toast({
-              title: "No Views Found",
-              description: `The workbook "${workbookToUse.name}" doesn't contain any published views.`,
-              variant: "default"
-            });
-          }
-        } else {
-          console.log('No workbook selected, fetching all views');
-          // Fetch all views if no workbook is selected
-          viewsData = await apiService.getAllViews();
-          console.log('API Response - Fetched all views:', viewsData);
-          
-          // If we get data, show success, otherwise we'll fall into the catch block
-          if (viewsData && viewsData.length > 0) {
-            toast({
-              title: "Views Loaded",
-              description: `Successfully loaded ${viewsData.length} views from all workbooks`
-            });
-          }
-        }
-        
-        // Explicitly set the views (even if empty array)
-        console.log('Setting views state to:', viewsData);
-        setViews(viewsData);
-        setError(null); // Clear any previous errors
-        
       } catch (error) {
         console.error('Error fetching views:', error);
-        
-        // Explicitly clear views and set error
-        setViews([]); // Ensure no stale views are shown
-        setError('Failed to load views from Tableau server. Please check your connection and try again.');
-        
-        console.log('API fetch failed, views state cleared, error state set');
-        
-        toast({
-          title: "Connection Error",
-          description: "Could not connect to Tableau server. Please check your connection and authentication.",
-          variant: "destructive"
-        });
+        setError(error instanceof Error ? error.message : 'Failed to load views');
+        setViews([]);
       } finally {
         setIsLoading(false);
-        console.log('fetchViews completed, isLoading set to false');
       }
     };
 
@@ -335,272 +232,263 @@ const ViewsPage: React.FC = () => {
   const handleRefresh = async () => {
     console.log('handleRefresh called for workbook:', selectedWorkbook);
     
-    // Immediately clear existing data
     setViews([]);
     setError(null);
     setIsLoading(true);
     
     try {
-      let viewsData: View[] = [];
-      
-      if (selectedWorkbook && selectedWorkbook.id) {
-        console.log(`Refreshing views for workbook ${selectedWorkbook.id}: ${selectedWorkbook.name}`);
-        
-        // Fetch views for the selected workbook
-        viewsData = await apiService.getWorkbookViews(selectedWorkbook.id);
-        console.log('Refresh API Response - Fetched views for workbook:', viewsData);
-        console.log('Number of views received on refresh:', viewsData.length);
-        
-        if (viewsData.length > 0) {
-          toast({
-            title: "Views Refreshed",
-            description: `Successfully loaded ${viewsData.length} views from Tableau`
-          });
-        } else {
-          console.log('No views found on refresh');
-          toast({
-            title: "No Views Found",
-            description: `The workbook "${selectedWorkbook.name}" doesn't contain any published views.`,
-            variant: "default"
-          });
-        }
-      } else {
-        console.log('No workbook selected, refreshing all views');
-        // Fetch all views if no workbook is selected
-        viewsData = await apiService.getAllViews();
-        console.log('Refresh API Response - Fetched all views:', viewsData);
-        
-        if (viewsData.length > 0) {
-          toast({
-            title: "Views Refreshed",
-            description: `Successfully loaded ${viewsData.length} views from Tableau`
-          });
-        }
+      if (!selectedWorkbook?.id) {
+        throw new Error('No workbook selected');
       }
+      const viewsData = await apiService.getWorkbookViews(selectedWorkbook.id);
       
-      // Explicitly set the views state
-      console.log('Setting refreshed views state to:', viewsData);
-      setViews(viewsData);
-      setError(null);
-      
+      if (viewsData.length > 0) {
+        toast({
+          title: "Views Refreshed",
+          description: `Successfully loaded ${viewsData.length} views`
+        });
+        setViews(viewsData);
+      } else {
+        console.log('No views found on refresh');
+        toast({
+          title: "No Views Found",
+          description: `No views found in "${selectedWorkbook.name}"`,
+          variant: "default"
+        });
+        setViews([]);
+      }
     } catch (error) {
       console.error('Error refreshing views:', error);
-      
-      // Explicitly clear views and set error
-      setViews([]); // Ensure no stale views persist
-      setError('Failed to refresh views from Tableau server. Please check your connection and try again.');
-      
-      console.log('Refresh failed, views state cleared, error state set');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to refresh views';
+      setError(errorMessage);
+      setViews([]);
       
       toast({
         title: "Connection Error",
-        description: "Could not refresh views from Tableau server. Check your connection and authentication.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
-      console.log('handleRefresh completed, isLoading set to false');
     }
   };
 
   return (
     <div className="container px-4 mx-auto animate-fade-in">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-        <Button variant="link" className="p-0 h-auto" asChild>
-          <Link to="/">Home</Link>
-        </Button>
-        <ChevronRight className="h-4 w-4" />
-        <Button variant="link" className="p-0 h-auto" asChild>
-          <Link to="/projects">Projects</Link>
-        </Button>
-        <ChevronRight className="h-4 w-4" />
-        <Button variant="link" className="p-0 h-auto" asChild>
-          <Link to="/workbooks">Workbooks</Link>
-        </Button>
-        {selectedWorkbook && (
-          <>
-            <ChevronRight className="h-4 w-4" />
-            <span className="font-medium text-foreground truncate max-w-xs">
-              {selectedWorkbook.name}
-            </span>
-          </>
-        )}
-        <ChevronRight className="h-4 w-4" />
-        <span className="font-medium text-foreground truncate max-w-xs">
-          Views/Sheets
-        </span>
-      </div>
-      
-      <div className="flex flex-col mb-6">
-        <h1 className="text-2xl font-bold mb-1">
-          {selectedWorkbook ? `${selectedWorkbook.name} Views` : 'All Views'}
-        </h1>
-        <p className="text-muted-foreground mb-6">
-          Browse and manage your Tableau views for migration
-        </p>
-
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div className="flex gap-2 max-w-md w-full">
-            <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search views..."
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
-            <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Export to PDF
-            </Button>
-            {/* Debug section - only show in development */}
-            {process.env.NODE_ENV === 'development' && (
-              <>
-                <Button variant="outline" size="sm" onClick={logCurrentState} className="gap-2 bg-yellow-50 border-yellow-200 text-yellow-800">
-                  🔍 Debug State
-                </Button>
-                <Button variant="outline" size="sm" onClick={forceClearData} className="gap-2 bg-red-50 border-red-200 text-red-800">
-                  🗑️ Force Clear
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {!error && selectedWorkbook && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-blue-600" />
-            <p className="font-medium text-blue-800">Workbook Selected</p>
-          </div>
-          <p className="text-sm text-blue-700 mt-1">
-            Showing views from: <span className="font-medium">{selectedWorkbook.name}</span>
+      {!selectedWorkbook ? (
+        <div className="flex flex-col items-center justify-center py-24">
+          <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+          <h2 className="text-xl font-semibold mb-2">No Workbook Selected</h2>
+          <p className="mb-4 text-muted-foreground">
+            Please select a workbook to view its sheets and dashboards.
           </p>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-5 w-1/3 mb-1" />
-                <Skeleton className="h-4 w-1/4" />
-                </CardHeader>
-              <CardContent>
-                <Skeleton className="w-full aspect-video rounded-md" />
-                </CardContent>
-              <CardFooter className="flex justify-between">
-                <Skeleton className="h-9 w-24" />
-                <Skeleton className="h-9 w-9 rounded-md" />
-                </CardFooter>
-              </Card>
-          ))}
-        </div>
-      ) : filteredViews.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredViews.map(view => (
-            <ViewCard key={view.id} view={view} />
-          ))}
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/workbooks">
+              <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
+              Browse Workbooks
+            </Link>
+          </Button>
         </div>
       ) : (
-        <div className="text-center py-16">
-          <div className="mx-auto w-24 h-24 bg-gradient-to-br from-muted to-muted/60 rounded-full flex items-center justify-center mb-6 border-4 border-muted/30">
-            {error ? (
-              <AlertCircle className="h-12 w-12 text-destructive" />
-            ) : (
-              <FileText className="h-12 w-12 text-muted-foreground" />
-            )}
-          </div>
-          <h3 className="text-xl font-semibold mb-3 text-foreground">
-            {error ? 'Unable to Connect to Tableau Server' : 'No Views Found'}
-          </h3>
-          <div className="max-w-lg mx-auto text-muted-foreground space-y-3">
-            {error ? (
+        <>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+            <Button variant="link" className="p-0 h-auto" asChild>
+              <Link to="/">Home</Link>
+            </Button>
+            <ChevronRight className="h-4 w-4" />
+            <Button variant="link" className="p-0 h-auto" asChild>
+              <Link to="/projects">Projects</Link>
+            </Button>
+            <ChevronRight className="h-4 w-4" />
+            <Button variant="link" className="p-0 h-auto" asChild>
+              <Link to="/workbooks">Workbooks</Link>
+            </Button>
+            {selectedWorkbook && (
               <>
-                <p className="text-destructive font-medium">
-                  Failed to load views from Tableau server
-                </p>
-                <p className="text-sm">
-                  Check your Tableau connection and authentication status. The server may be unavailable or you may not have the proper permissions.
-                </p>
-                <div className="flex gap-2 justify-center mt-4">
-                  <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading} className="gap-2">
+                <ChevronRight className="h-4 w-4" />
+                <span className="font-medium text-foreground truncate max-w-xs">
+                  {selectedWorkbook.name}
+                </span>
+              </>
+            )}
+            <ChevronRight className="h-4 w-4" />
+            <span className="font-medium text-foreground truncate max-w-xs">
+              Views/Sheets
+            </span>
+          </div>
+          
+          <div className="flex flex-col mb-6">
+            <h1 className="text-2xl font-bold mb-1">
+              {selectedWorkbook ? `${selectedWorkbook.name} Views` : 'All Views'}
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              Browse and manage your Tableau views for migration
+            </p>
+
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <div className="flex gap-2 max-w-md w-full">
+                <div className="relative flex-grow">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search views..."
+                    className="pl-9"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
                     <RefreshCw className="h-4 w-4" />
-                    Retry Connection
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to="/workbooks">
-                      <ChevronRight className="h-4 w-4 rotate-180" />
-                      Back to Workbooks
-                    </Link>
-                  </Button>
-                </div>
-              </>
-            ) : searchQuery ? (
-              <>
-                <p>No views match your search for <span className="font-medium text-foreground">"{searchQuery}"</span></p>
-                <div className="flex gap-2 justify-center">
-                  <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
-                    Clear Search
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                    Refresh Views
-                  </Button>
-                </div>
-              </>
-            ) : selectedWorkbook ? (
-              <>
-                <p>No views found in the <span className="font-medium text-foreground">"{selectedWorkbook.name}"</span> workbook</p>
-                <p className="text-sm">This workbook might not contain any published views, or you might not have access to them.</p>
-                <div className="flex gap-2 justify-center">
-                  <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                    Refresh Views
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to="/workbooks">
-                      <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
-                      Back to Workbooks
-                    </Link>
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p>No views are currently available</p>
-                <p className="text-sm">Select a workbook to view its sheets and dashboards.</p>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/workbooks">
-                    <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
-                    Browse Workbooks
-                  </Link>
+                  )}
                 </Button>
-              </>
-            )}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter className="h-4 w-4" />
+                  Filter
+                </Button>
+                <Button size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Export to PDF
+                </Button>
+                {/* Debug section - only show in development */}
+                {process.env.NODE_ENV === 'development' && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={logCurrentState} className="gap-2 bg-yellow-50 border-yellow-200 text-yellow-800">
+                      🔍 Debug State
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={forceClearData} className="gap-2 bg-red-50 border-red-200 text-red-800">
+                      🗑️ Force Clear
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+
+          {!error && selectedWorkbook && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-600" />
+                <p className="font-medium text-blue-800">Workbook Selected</p>
+              </div>
+              <p className="text-sm text-blue-700 mt-1">
+                Showing views from: <span className="font-medium">{selectedWorkbook.name}</span>
+              </p>
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i}>
+                  <CardHeader className="pb-2">
+                    <Skeleton className="h-5 w-1/3 mb-1" />
+                    <Skeleton className="h-4 w-1/4" />
+                    </CardHeader>
+                  <CardContent>
+                    <Skeleton className="w-full aspect-video rounded-md" />
+                    </CardContent>
+                  <CardFooter className="flex justify-between">
+                    <Skeleton className="h-9 w-24" />
+                    <Skeleton className="h-9 w-9 rounded-md" />
+                    </CardFooter>
+                  </Card>
+              ))}
+            </div>
+          ) : filteredViews.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredViews.map(view => (
+                <ViewCard key={view.id} view={view} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <div className="mx-auto w-24 h-24 bg-gradient-to-br from-muted to-muted/60 rounded-full flex items-center justify-center mb-6 border-4 border-muted/30">
+                {error ? (
+                  <AlertCircle className="h-12 w-12 text-destructive" />
+                ) : (
+                  <FileText className="h-12 w-12 text-muted-foreground" />
+                )}
+              </div>
+              <h3 className="text-xl font-semibold mb-3 text-foreground">
+                {error ? 'Unable to Connect to Tableau Server' : 'No Views Found'}
+              </h3>
+              <div className="max-w-lg mx-auto text-muted-foreground space-y-3">
+                {error ? (
+                  <>
+                    <p className="text-destructive font-medium">
+                      Failed to load views from Tableau server
+                    </p>
+                    <p className="text-sm">
+                      Check your Tableau connection and authentication status. The server may be unavailable or you may not have the proper permissions.
+                    </p>
+                    <div className="flex gap-2 justify-center mt-4">
+                      <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading} className="gap-2">
+                        <RefreshCw className="h-4 w-4" />
+                        Retry Connection
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to="/workbooks">
+                          <ChevronRight className="h-4 w-4 rotate-180" />
+                          Back to Workbooks
+                        </Link>
+                      </Button>
+                    </div>
+                  </>
+                ) : searchQuery ? (
+                  <>
+                    <p>No views match your search for <span className="font-medium text-foreground">"{searchQuery}"</span></p>
+                    <div className="flex gap-2 justify-center">
+                      <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
+                        Clear Search
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        Refresh Views
+                      </Button>
+                    </div>
+                  </>
+                ) : selectedWorkbook ? (
+                  <>
+                    <p>No views found in the <span className="font-medium text-foreground">"{selectedWorkbook.name}"</span> workbook</p>
+                    <p className="text-sm">This workbook might not contain any published views, or you might not have access to them.</p>
+                    <div className="flex gap-2 justify-center">
+                      <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        Refresh Views
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to="/workbooks">
+                          <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
+                          Back to Workbooks
+                        </Link>
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p>No views are currently available</p>
+                    <p className="text-sm">Select a workbook to view its sheets and dashboards.</p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to="/workbooks">
+                        <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
+                        Browse Workbooks
+                      </Link>
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

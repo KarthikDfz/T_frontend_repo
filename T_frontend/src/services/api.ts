@@ -32,12 +32,7 @@ export interface View {
   name: string;
   content_url?: string;
   workbook_id?: string;
-  view_url_name?: string;
-  created_at?: string;
-  updated_at?: string;
-  owner_id?: string;
   project_id?: string;
-  tags?: string[];
 }
 
 export interface Datasource {
@@ -61,6 +56,8 @@ export interface Calculation {
   type: 'measure' | 'dimension' | 'parameter';
   complexity: 'simple' | 'medium' | 'complex';
   description?: string;
+  dataType?: string;
+  sheet?: string;
 }
 
 export interface TableauCredentials {
@@ -264,63 +261,27 @@ class ApiService {
 
   async getWorkbookViews(workbookId: string): Promise<View[]> {
     try {
-      console.log(`Fetching views for workbook: ${workbookId}`);
-      
-      // Try different possible endpoints for workbook views
-      const possibleEndpoints = [
-        `${API_BASE_URL}/tableau/${SITE_NAME}/workbooks/${workbookId}/views`,
-        `${API_BASE_URL}/tableau/${SITE_NAME}/views?workbook_id=${workbookId}`,
-        `${API_BASE_URL}/workbooks/${workbookId}/views`,
-        `${API_BASE_URL}/tableau/views?workbook=${workbookId}`,
-        `${API_BASE_URL}/views?workbook_id=${workbookId}`
-      ];
-      
-      let lastError = null;
-      
-      for (const endpoint of possibleEndpoints) {
-        try {
-          console.log(`Trying endpoint: GET ${endpoint}`);
-          
-          const response = await fetch(endpoint);
-          console.log(`Response status for ${endpoint}: ${response.status}`);
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log(`Success! Received data from ${endpoint}:`, data);
-            
-            // Handle different response structures
-            let views = [];
-            if (data.views && Array.isArray(data.views)) {
-              views = data.views;
-            } else if (Array.isArray(data)) {
-              views = data;
-            } else if (data.data && Array.isArray(data.data)) {
-              views = data.data;
-            }
-            
-            console.log(`Processed ${views.length} views from workbook`);
-            return views;
-          } else if (response.status === 404) {
-            console.log(`Endpoint ${endpoint} not found (404), trying next...`);
-            continue;
-          } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-        } catch (endpointError) {
-          console.log(`Endpoint ${endpoint} failed:`, endpointError);
-          lastError = endpointError;
-          continue;
+      const response = await fetch(`${API_BASE_URL}/tableau/workbook/${workbookId}/views`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include' // Include auth cookies if using session auth
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Views endpoint not found');
         }
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
       }
-      
-      // If all endpoints failed, check if it's because the workbook has no views
-      console.warn(`All view endpoints failed for workbook ${workbookId}. This workbook may not have any published views.`);
-      return []; // Return empty array instead of throwing error
-      
+
+      const data = await response.json();
+      return data.views || [];
     } catch (error) {
-      console.error('Error fetching workbook views:', error);
-      // Return empty array instead of throwing error for better UX
-      return [];
+      console.error('API Error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch views');
     }
   }
 
@@ -498,78 +459,61 @@ class ApiService {
     }
   }
 
-  /**
-   * Get custom calculations for a specific workbook
-   * @param workbookId The ID of the workbook to get calculations for
-   * @returns Promise with the workbook calculations
-   */
-  async getWorkbookCalculations(workbookId: string): Promise<Calculation[]> {
-    try {
-      console.log(`Fetching calculations for workbook: ${workbookId}`);
-      
-      // Try different possible endpoints for workbook calculations
-      const possibleEndpoints = [
-        `${API_BASE_URL}/tableau/${SITE_NAME}/workbooks/${workbookId}/calculations`,
-        `${API_BASE_URL}/tableau/${SITE_NAME}/calculations?workbook_id=${workbookId}`,
-        `${API_BASE_URL}/workbooks/${workbookId}/calculations`,
-        `${API_BASE_URL}/tableau/calculations?workbook=${workbookId}`,
-        `${API_BASE_URL}/calculations?workbook_id=${workbookId}`,
-        // Fallback: try views endpoint and extract calculations from views
-        `${API_BASE_URL}/tableau/${SITE_NAME}/workbooks/${workbookId}/views`
-      ];
-      
-      let lastError = null;
-      
-      for (const endpoint of possibleEndpoints) {
-        try {
-          console.log(`Trying endpoint: GET ${endpoint}`);
-          
-          const response = await fetch(endpoint);
-          console.log(`Response status for ${endpoint}: ${response.status}`);
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log(`Success! Received data from ${endpoint}:`, data);
-            
-            // Handle different response structures
-            let calculations = [];
-            if (data.calculations && Array.isArray(data.calculations)) {
-              calculations = data.calculations;
-            } else if (Array.isArray(data)) {
-              calculations = data;
-            } else if (data.data && Array.isArray(data.data)) {
-              calculations = data.data;
-            } else if (endpoint.includes('/views') && data.views) {
-              // If this is a views endpoint, try to extract calculations from views
-              console.log('This is a views endpoint, no calculations available');
-              calculations = [];
-            }
-            
-            console.log(`Processed ${calculations.length} calculations from workbook`);
-            return calculations;
-          } else if (response.status === 404) {
-            console.log(`Endpoint ${endpoint} not found (404), trying next...`);
-            continue;
-          } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-        } catch (endpointError) {
-          console.log(`Endpoint ${endpoint} failed:`, endpointError);
-          lastError = endpointError;
-          continue;
-        }
-      }
-      
-      // If all endpoints failed, this workbook may not have any calculations
-      console.warn(`All calculation endpoints failed for workbook ${workbookId}. This workbook may not have any custom calculations.`);
-      return []; // Return empty array instead of throwing error
-      
-    } catch (error) {
-      console.error('Error fetching workbook calculations:', error);
-      // Return empty array instead of throwing error for better UX
-      return [];
+  // Updated getWorkbookCalculations method in api.ts
+// Add this to your existing ApiService class
+
+/**
+ * Get custom calculations for a specific workbook
+ * @param workbookId The ID of the workbook (not used in API call but kept for compatibility)
+ * @param workbookName The name of the workbook to get calculations for
+ * @returns Promise with the workbook calculations
+ */
+async getWorkbookCalculations(workbookId: string, workbookName?: string): Promise<{ calculations: Calculation[] }> {
+  try {
+    // Validate that we have a workbook name
+    if (!workbookName) {
+      console.error('Workbook name is required to fetch calculations');
+      return { calculations: [] };
     }
+    
+    console.log(`Fetching calculations for workbook: ${workbookName}`);
+    
+    // Use the correct endpoint with workbook_name as query parameter
+    const endpoint = `${API_BASE_URL}/tableau/calculated-fields?workbook_name=${encodeURIComponent(workbookName)}`;
+    console.log(`API Request: GET ${endpoint}`);
+    
+    const response = await fetch(endpoint);
+    console.log(`Response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Received response:`, data);
+    console.log(`Found ${data.calculated_fields_count || 0} calculations for workbook "${workbookName}"`);
+    
+    // Map the calculated_fields to the expected Calculation interface
+    const calculations = (data.calculated_fields || []).map((field: any, index: number) => ({
+      id: field.name || `calc-${index}`, // Use name as ID
+      name: field.name || 'Unnamed Calculation',
+      formula: field.formula || 'N/A',
+      type: field.role === 'MEASURE' ? 'measure' : field.role === 'DIMENSION' ? 'dimension' : 'measure',
+      complexity: 'medium', // Default since not provided by API
+      description: `Data Type: ${field.dataType || 'Unknown'} | Sheet: ${field.sheet || 'Unknown'}`,
+      dataType: field.dataType || 'Unknown',
+      sheet: field.sheet || 'Unknown',
+      role: field.role || 'MEASURE'
+    }));
+    
+    return { calculations };
+    
+  } catch (error) {
+    console.error('Error fetching workbook calculations:', error);
+    throw error; // Re-throw to handle in component
   }
+}
   
   /**
    * Convert Tableau calculations to DAX expressions
@@ -619,6 +563,28 @@ class ApiService {
       throw error;
     }
   }
+// Add this method to the ApiService class in api.ts
+  async getWorkbookDatasources(workbookId: string): Promise<any[]> {
+    try {
+      const url = `${API_BASE_URL}/tableau/${workbookId}/datasources`;
+      console.log(`Fetching datasources for workbook: ${workbookId} from ${url}`);
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch workbook datasources');
+      }
+      
+      const data = await response.json();
+      console.log('Workbook datasources response:', data);
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching workbook datasources:', error);
+      throw error;
+    }
+  }
+
 }
 
 

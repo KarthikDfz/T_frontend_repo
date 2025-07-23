@@ -1,154 +1,94 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronRight, Database, Plus, ServerIcon, FileSpreadsheet, Cloud, RefreshCw, Search, ArrowRight, ExternalLink, Download, Loader2 } from 'lucide-react';
+import { ChevronRight, Database, ServerIcon, FileSpreadsheet, Cloud, RefreshCw, Search, ExternalLink, Download, Loader2, Calendar, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/components/ui/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { apiService, Datasource, Project } from '@/services/api';
+import { apiService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-interface DataSourceProps {
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  fields: { name: string; label: string; type: string; placeholder: string }[];
-  connectHandler: (data: Record<string, string>) => void;
+interface Connection {
+  connection_id: string;
+  datasource_id: string;
+  datasource_name: string;
+  connection_type: string;
+  username: string;
+  server_address: string;
+  database_name: string | null;
+  connection_credentials: string;
 }
 
-const DataSourceForm: React.FC<DataSourceProps> = ({ title, description, icon: Icon, fields, connectHandler }) => {
-  const [formData, setFormData] = useState<Record<string, string>>({});
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-    setFormData({ ...formData, [field]: e.target.value });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsConnecting(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      connectHandler(formData);
-      
-      toast({
-        title: "Connection Successful",
-        description: `Successfully connected to ${title}`,
-      });
-    } catch (error) {
-      toast({
-        title: "Connection Failed",
-        description: `Failed to connect to ${title}. Please check your credentials.`,
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="bg-primary/10 p-2 rounded-md">
-          <Icon className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-      </div>
-
-      <div className="grid gap-4">
-        {fields.map((field) => (
-          <div key={field.name} className="grid gap-2">
-            <Label htmlFor={field.name}>{field.label}</Label>
-            <Input
-              id={field.name}
-              type={field.type}
-              placeholder={field.placeholder}
-              onChange={(e) => handleChange(e, field.name)}
-              required
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2 mt-2">
-        <Switch id="saveCredentials" />
-        <Label htmlFor="saveCredentials">Save credentials securely</Label>
-      </div>
-
-      <div className="flex justify-end mt-6">
-        <Button type="submit" disabled={isConnecting}>
-          {isConnecting ? (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Connecting...
-            </>
-          ) : (
-            <>
-              Connect
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </>
-          )}
-        </Button>
-      </div>
-    </form>
-  );
-};
-
-interface DatasourceCardProps {
-  datasource: Datasource;
+interface WorkbookDatasource {
+  workbook_name: string;
+  workbook_id: string;
+  project_name: string;
+  created_at: string;
+  updated_at: string;
+  connections: Connection[];
 }
 
-const DatasourceCard: React.FC<DatasourceCardProps> = ({ datasource }) => {
-  // Determine datasource type based on name or type field
-  const getDatasourceType = (): string => {
-    const name = datasource.name?.toLowerCase() || '';
-    const type = datasource.type?.toLowerCase() || '';
+const ConnectionCard: React.FC<{ connection: Connection }> = ({ connection }) => {
+  // Determine connection type icon and color
+  const getConnectionIcon = () => {
+    const type = connection.connection_type?.toLowerCase() || '';
     
-    if (type.includes('azure') || name.includes('azure')) return 'azure';
-    if (type.includes('sql') || name.includes('sql')) return 'sql';
-    if (type.includes('excel') || name.includes('excel')) return 'excel';
-    return 'database'; // default type
+    if (type.includes('sql')) return <Database className="h-5 w-5 text-purple-500" />;
+    if (type.includes('excel')) return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
+    if (type.includes('cloud') || type.includes('online')) return <Cloud className="h-5 w-5 text-blue-500" />;
+    return <ServerIcon className="h-5 w-5 text-amber-500" />;
   };
-
-  const datasourceType = getDatasourceType();
   
   return (
-    <div className="flex items-center justify-between py-4 border-b last:border-b-0">
-      <div className="flex items-center gap-3">
-        {datasourceType === 'azure' && <Cloud className="h-5 w-5 text-blue-500" />}
-        {datasourceType === 'sql' && <Database className="h-5 w-5 text-purple-500" />}
-        {datasourceType === 'excel' && <FileSpreadsheet className="h-5 w-5 text-green-500" />}
-        {datasourceType === 'database' && <Database className="h-5 w-5 text-amber-500" />}
-        <div>
-          <h4 className="font-medium">{datasource.name}</h4>
-          <p className="text-xs text-muted-foreground">
-            {datasource.updated_at ? `Updated: ${new Date(datasource.updated_at).toLocaleDateString()}` : 
-             datasource.created_at ? `Created: ${new Date(datasource.created_at).toLocaleDateString()}` : 
-             'No date information'}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <Badge variant="outline" className="font-normal text-xs">
-          {datasource.id.substring(0, 8)}...
-        </Badge>
-        <Button variant="ghost" size="sm">
-          <ExternalLink className="h-4 w-4" />
-        </Button>
+    <div className="flex items-start gap-3 py-4 border-b last:border-b-0">
+      {getConnectionIcon()}
+      <div className="flex-1">
+        <ul className="space-y-2 text-sm">
+          <li>
+            <span className="font-semibold">Datasource Name:</span>{' '}
+            <code className="bg-muted px-2 py-0.5 rounded text-xs">
+              {connection.datasource_name || 'Unnamed Datasource'}
+            </code>
+          </li>
+          <li>
+            <span className="font-semibold">Connection Type:</span>{' '}
+            <code className="bg-muted px-2 py-0.5 rounded text-xs">
+              {connection.connection_type}
+            </code>
+            {connection.connection_type?.toLowerCase().includes('azure') && ' (Azure SQL Database)'}
+          </li>
+          {connection.username && (
+            <li>
+              <span className="font-semibold">Username:</span>{' '}
+              <code className="bg-muted px-2 py-0.5 rounded text-xs">
+                {connection.username}
+              </code>
+            </li>
+          )}
+          <li>
+            <span className="font-semibold">Server Address:</span>{' '}
+            <code className="bg-muted px-2 py-0.5 rounded text-xs">
+              {connection.server_address}
+            </code>
+          </li>
+          <li>
+            <span className="font-semibold">Database Name:</span>{' '}
+            <code className="bg-muted px-2 py-0.5 rounded text-xs">
+              {connection.database_name || 'null'}
+            </code>
+          </li>
+          <li>
+            <span className="font-semibold">Connection Credentials:</span>{' '}
+            <code className="bg-muted px-2 py-0.5 rounded text-xs">
+              {connection.connection_credentials}
+            </code>
+          </li>
+        </ul>
       </div>
     </div>
   );
@@ -157,16 +97,15 @@ const DatasourceCard: React.FC<DatasourceCardProps> = ({ datasource }) => {
 const DataSourcesPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [datasources, setDatasources] = useState<Datasource[]>([]);
+  const [workbookDatasources, setWorkbookDatasources] = useState<WorkbookDatasource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [exporting, setExporting] = useState<boolean>(false);
   const { toast } = useToast();
   const datasourcesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Get workbook and project context
+  // Get workbook information
   const [selectedWorkbook, setSelectedWorkbook] = useState<{id: string, name: string, projectId?: string} | null>(null);
 
   useEffect(() => {
@@ -182,168 +121,58 @@ const DataSourcesPage: React.FC = () => {
     const workbookName = searchParams.get('workbookName');
     const projectId = searchParams.get('projectId');
     
-    let workbookToUse = null;
     if (workbookId && workbookName) {
-      workbookToUse = { 
+      const workbook = { 
         id: workbookId, 
-        name: workbookName,
+        name: decodeURIComponent(workbookName),
         projectId: projectId || undefined
       };
       
-      // Store workbook selection for context
-      localStorage.setItem('selectedWorkbook', JSON.stringify(workbookToUse));
-      setSelectedWorkbook(workbookToUse);
+      setSelectedWorkbook(workbook);
       
-      toast({
-        title: "Workbook Selected",
-        description: `Showing data sources for workbook: ${workbookName}`
-      });
-    }
-
-    // Get selected project from localStorage as fallback
-    const projectData = localStorage.getItem('selectedProject');
-    if (projectData && !workbookToUse) {
-      setSelectedProject(JSON.parse(projectData));
-    }
-
-    const fetchDatasources = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        let datasourcesData: Datasource[] = [];
-        
-        if (workbookToUse) {
-          // Fetch datasources for the selected workbook
-          console.log(`Fetching datasources for workbook: ${workbookToUse.id}`);
-          try {
-            // Try to fetch workbook-specific datasources
-            const response = await fetch(`http://localhost:8001/tableau/datafactztableau/workbooks/${workbookToUse.id}/datasources`);
-            if (response.ok) {
-              const data = await response.json();
-              datasourcesData = data.datasources || [];
-            } else {
-              throw new Error('Workbook datasources endpoint not available');
-            }
-          } catch (error) {
-            console.warn('Workbook-specific datasources not available, using project-level datasources');
-            // Fallback to project-level datasources if workbook endpoint doesn't exist
-            if (workbookToUse.projectId) {
-              datasourcesData = await apiService.getDatasources(workbookToUse.projectId);
-            } else {
-              datasourcesData = await apiService.getDatasources();
-            }
-          }
-        } else if (selectedProject) {
-          // Fetch datasources for the selected project
-          datasourcesData = await apiService.getDatasources(selectedProject.id);
-        } else {
-          // Fetch all datasources if no project is selected
-          datasourcesData = await apiService.getDatasources();
+      // Fetch workbook datasources
+      fetchWorkbookDatasources(workbookId);
+    } else {
+      // Try to get from localStorage
+      const storedWorkbook = localStorage.getItem('selectedWorkbook');
+      if (storedWorkbook) {
+        const workbook = JSON.parse(storedWorkbook);
+        setSelectedWorkbook(workbook);
+        if (workbook.id) {
+          fetchWorkbookDatasources(workbook.id);
         }
-        
-        setDatasources(datasourcesData);
-        
-        if (workbookToUse) {
-          toast({
-            title: "Data Sources Loaded",
-            description: `Found ${datasourcesData.length} data source(s) for workbook: ${workbookToUse.name}`
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching datasources:', error);
-        setError('Failed to load datasources. Please check your connection and try again.');
-        setDatasources([]);
-        
-        toast({
-          title: "Error Loading Data Sources",
-          description: "Could not load data sources. Using sample data for demonstration.",
-          variant: "destructive"
-        });
-        
-        // Create some mock datasources for demonstration
-        const mockDatasources: Datasource[] = [
-          {
-            id: 'ds1',
-            name: workbookToUse ? `${workbookToUse.name} - Sales Database` : 'Sales Database',
-            type: 'sql',
-            project_id: workbookToUse?.projectId || selectedProject?.id || 'unknown',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          {
-            id: 'ds2',
-            name: workbookToUse ? `${workbookToUse.name} - Customer Data` : 'Customer Data',
-            type: 'excel',
-            project_id: workbookToUse?.projectId || selectedProject?.id || 'unknown',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ];
-        
-        setDatasources(mockDatasources);
-      } finally {
+      } else {
+        setError('No workbook selected. Please select a workbook first.');
         setIsLoading(false);
       }
-    };
+    }
+  }, [navigate, searchParams]);
 
-    fetchDatasources();
-  }, [navigate, searchParams, selectedProject, toast]);
-
-  // Filter datasources by search query
-  const filteredDatasources = datasources.filter(ds => 
-    ds.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (ds.description && ds.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const handleRefresh = async () => {
-    setIsLoading(true);
+  const fetchWorkbookDatasources = async (workbookId: string) => {
     try {
-      let datasourcesData: Datasource[] = [];
-      
-      if (selectedWorkbook) {
-        // Fetch datasources for the selected workbook
-        console.log(`Refreshing datasources for workbook: ${selectedWorkbook.id}`);
-        try {
-          // Try to fetch workbook-specific datasources
-          const response = await fetch(`http://localhost:8001/tableau/datafactztableau/workbooks/${selectedWorkbook.id}/datasources`);
-          if (response.ok) {
-            const data = await response.json();
-            datasourcesData = data.datasources || [];
-          } else {
-            throw new Error('Workbook datasources endpoint not available');
-          }
-        } catch (error) {
-          console.warn('Workbook-specific datasources not available, using project-level datasources');
-          // Fallback to project-level datasources if workbook endpoint doesn't exist
-          if (selectedWorkbook.projectId) {
-            datasourcesData = await apiService.getDatasources(selectedWorkbook.projectId);
-          } else {
-            datasourcesData = await apiService.getDatasources();
-          }
-        }
-      } else if (selectedProject) {
-        // Fetch datasources for the selected project
-        datasourcesData = await apiService.getDatasources(selectedProject.id);
-      } else {
-        // Fetch all datasources if no project is selected
-        datasourcesData = await apiService.getDatasources();
-      }
-      
-      setDatasources(datasourcesData);
+      setIsLoading(true);
       setError(null);
       
-      toast({
-        title: "Data Sources Refreshed",
-        description: `Successfully refreshed ${datasourcesData.length} data source(s)`
-      });
-    } catch (error) {
-      console.error('Error refreshing datasources:', error);
-      setError('Failed to refresh datasources. Please try again later.');
+      console.log(`Fetching datasources for workbook: ${workbookId}`);
+      const datasourcesData = await apiService.getWorkbookDatasources(workbookId);
+      
+      setWorkbookDatasources(datasourcesData);
+      
+      // Calculate total connections
+      const totalConnections = datasourcesData.reduce((acc, ds) => acc + (ds.connections?.length || 0), 0);
       
       toast({
-        title: "Error Refreshing Data Sources",
-        description: "Could not refresh data sources. Check your connection.",
+        title: "Data Sources Loaded",
+        description: `Found ${totalConnections} connection(s) for workbook: ${selectedWorkbook?.name || workbookId}`
+      });
+    } catch (error) {
+      console.error('Error fetching workbook datasources:', error);
+      setError('Failed to load data sources. Please check your connection and try again.');
+      setWorkbookDatasources([]);
+      
+      toast({
+        title: "Error Loading Data Sources",
+        description: "Could not load data sources from the server.",
         variant: "destructive"
       });
     } finally {
@@ -351,15 +180,34 @@ const DataSourcesPage: React.FC = () => {
     }
   };
 
-  const handleConnect = (source: string, data: Record<string, string>) => {
-    console.log(`Connecting to ${source} with`, data);
+  const handleRefresh = () => {
+    if (selectedWorkbook?.id) {
+      fetchWorkbookDatasources(selectedWorkbook.id);
+    }
   };
 
+  // Filter connections based on search query
+  const getFilteredConnections = () => {
+    if (!searchQuery) return workbookDatasources;
+    
+    return workbookDatasources.map(wd => ({
+      ...wd,
+      connections: wd.connections.filter(conn => 
+        conn.datasource_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conn.connection_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conn.server_address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conn.database_name?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    })).filter(wd => wd.connections.length > 0);
+  };
+
+  const filteredData = getFilteredConnections();
+
   const handleExportToPDF = async () => {
-    if (!datasourcesContainerRef.current || filteredDatasources.length === 0) {
+    if (!datasourcesContainerRef.current || filteredData.length === 0) {
       toast({
         title: "Export failed",
-        description: "No datasources to export or the content is not ready.",
+        description: "No data sources to export or the content is not ready.",
         variant: "destructive"
       });
       return;
@@ -373,10 +221,8 @@ const DataSourcesPage: React.FC = () => {
         description: "Generating your export, please wait...",
       });
       
-      // Create a timestamp for the filename
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       
-      // Set up PDF document
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "px",
@@ -387,31 +233,23 @@ const DataSourcesPage: React.FC = () => {
       pdf.setFontSize(18);
       pdf.text("Tableau Data Sources Export", 40, 40);
       pdf.setFontSize(12);
-      pdf.text(`Generated: ${new Date().toLocaleString()}`, 40, 60);
-      pdf.setFontSize(10);
-      pdf.text(`Total Data Sources: ${filteredDatasources.length}`, 40, 75);
-      pdf.text(`Filters Applied: ${searchQuery !== "" ? `Search: "${searchQuery}"` : "None"}`, 40, 90);
+      pdf.text(`Workbook: ${selectedWorkbook?.name || 'Unknown'}`, 40, 60);
+      pdf.text(`Generated: ${new Date().toLocaleString()}`, 40, 75);
       
-      // Capture the datasources container as an image
+      // Capture content
       const canvas = await html2canvas(datasourcesContainerRef.current, {
         scale: 2,
         logging: false,
         useCORS: true
       });
       
-      // Convert canvas to image
       const imgData = canvas.toDataURL('image/png');
-      
-      // Calculate dimensions to fit in PDF
       const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth() - 80; // margins
+      const pdfWidth = pdf.internal.pageSize.getWidth() - 80;
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      // Add image to PDF
-      pdf.addImage(imgData, 'PNG', 40, 105, pdfWidth, pdfHeight);
-      
-      // Save the PDF
-      pdf.save(`tableau-datasources-${timestamp}.pdf`);
+      pdf.addImage(imgData, 'PNG', 40, 95, pdfWidth, pdfHeight);
+      pdf.save(`tableau-datasources-${selectedWorkbook?.name.replace(/\s+/g, '-')}-${timestamp}.pdf`);
       
       toast({
         title: "Export complete",
@@ -429,8 +267,24 @@ const DataSourcesPage: React.FC = () => {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   return (
     <div className="container px-4 mx-auto animate-fade-in">
+      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
         <Button variant="link" className="p-0 h-auto" asChild>
           <Link to="/">Home</Link>
@@ -451,197 +305,164 @@ const DataSourcesPage: React.FC = () => {
             </span>
           </>
         )}
-        {selectedProject && !selectedWorkbook && (
-          <>
-            <ChevronRight className="h-4 w-4" />
-            <span className="font-medium text-foreground truncate max-w-xs">
-              {selectedProject.name}
-            </span>
-          </>
-        )}
         <ChevronRight className="h-4 w-4" />
-        <span className="font-medium text-foreground truncate max-w-xs">
+        <span className="font-medium text-foreground">
           Data Sources
         </span>
       </div>
       
+      {/* Header */}
       <div className="flex flex-col mb-8">
         <h1 className="text-2xl font-bold mb-1">
-          {selectedWorkbook 
-            ? `${selectedWorkbook.name} Data Sources` 
-            : selectedProject 
-              ? `${selectedProject.name} Data Sources` 
-              : 'All Data Sources'
-          }
+          {selectedWorkbook ? `${selectedWorkbook.name} Data Sources` : 'Data Sources'}
         </h1>
         <p className="text-muted-foreground mb-6">
           {selectedWorkbook 
-            ? `Data sources used in the "${selectedWorkbook.name}" workbook`
-            : 'Connect and manage your Tableau data sources for migration to Power BI'
+            ? `Data sources and connections used in the "${selectedWorkbook.name}" workbook`
+            : 'Manage your Tableau data sources for migration to Power BI'
           }
         </p>
-        
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <Card className="col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Database className="h-4 w-4" />
-                  Tableau Data Sources
-                </CardTitle>
-                <CardDescription>
-                  Your available data sources from Tableau
-                </CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <div className="relative max-w-xs w-full">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search sources..."
-                    className="pl-9 h-9"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    disabled={isLoading}
-                  />
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-2"
-                  onClick={handleRefresh}
-                  disabled={isLoading}
-                >
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-2"
-                  onClick={handleExportToPDF}
-                  disabled={isLoading || exporting || filteredDatasources.length === 0}
-                >
-                  {exporting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                  Export to PDF
-                </Button>
-              </div>
+      {/* Main Content */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Tableau Data Sources
+              </CardTitle>
+              <CardDescription>
+                Data connections from your Tableau workbook
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
-            {error && (
-              <div className="bg-red-50 text-red-800 px-4 py-3 rounded-md mb-4 border border-red-200">
-                <p className="font-medium">{error}</p>
-                <p className="text-sm mt-1">Try refreshing or check your API connection.</p>
+            <div className="flex gap-2">
+              <div className="relative max-w-sm w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search connections..."
+                  className="pl-9 h-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  disabled={isLoading}
+                />
               </div>
-            )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={handleRefresh}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={handleExportToPDF}
+                disabled={isLoading || exporting || filteredData.length === 0}
+              >
+                {exporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                Export to PDF
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="bg-red-50 text-red-800 px-4 py-3 rounded-md mb-4 border border-red-200">
+              <p className="font-medium">{error}</p>
+              {selectedWorkbook && (
+                <p className="text-sm mt-1">Try refreshing or check your connection.</p>
+              )}
+            </div>
+          )}
 
-            {isLoading ? (
-              <div className="space-y-4 py-2">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="flex items-center justify-between py-4 border-b">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-10 w-10 rounded" />
-                      <div>
-                        <Skeleton className="h-5 w-40 mb-1" />
-                        <Skeleton className="h-3 w-24" />
+          {isLoading ? (
+            <div className="space-y-4 py-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between py-4 border-b">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded" />
+                    <div>
+                      <Skeleton className="h-5 w-40 mb-2" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-8 w-24" />
+                </div>
+              ))}
+            </div>
+          ) : filteredData.length > 0 ? (
+            <div ref={datasourcesContainerRef}>
+              {filteredData.map((workbookDs, idx) => (
+                <div key={idx} className="mb-6 last:mb-0">
+                  {workbookDatasources.length > 1 && (
+                    <div className="mb-4 pb-2 border-b">
+                      <h3 className="font-medium">{workbookDs.workbook_name}</h3>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Created: {formatDate(workbookDs.created_at)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Updated: {formatDate(workbookDs.updated_at)}
+                        </span>
+                        <span>
+                          Project: {workbookDs.project_name}
+                        </span>
                       </div>
                     </div>
-                    <Skeleton className="h-8 w-20" />
-                  </div>
-                ))}
-              </div>
-            ) : filteredDatasources.length > 0 ? (
-              <ScrollArea className="h-[250px]" ref={datasourcesContainerRef}>
-                {filteredDatasources.map((datasource) => (
-                  <DatasourceCard
-                    key={datasource.id}
-                    datasource={datasource}
-                  />
-                ))}
-              </ScrollArea>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Database className="h-10 w-10 text-muted-foreground/50 mb-4" />
-                <p className="text-muted-foreground">
-                  {searchQuery 
-                    ? `No data sources matching "${searchQuery}" were found` 
-                    : selectedProject 
-                      ? `No data sources found in project "${selectedProject.name}"` 
-                      : 'No data sources found in your Tableau instance'}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Add New Connection
-            </CardTitle>
-            <CardDescription>
-              Configure new data sources for migration
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="sql">
-              <TabsList className="grid grid-cols-3 mb-4">
-                <TabsTrigger value="sql">SQL</TabsTrigger>
-                <TabsTrigger value="excel">Excel</TabsTrigger>
-                <TabsTrigger value="azure">Azure</TabsTrigger>
-              </TabsList>
-              <TabsContent value="sql">
-                <DataSourceForm
-                  title="SQL Server Connection"
-                  description="Connect to your SQL Server database"
-                  icon={ServerIcon}
-                  fields={[
-                    { name: 'server', label: 'Server', type: 'text', placeholder: 'e.g. localhost' },
-                    { name: 'database', label: 'Database', type: 'text', placeholder: 'e.g. AdventureWorks' },
-                    { name: 'username', label: 'Username', type: 'text', placeholder: 'e.g. sa' },
-                    { name: 'password', label: 'Password', type: 'password', placeholder: '••••••••' },
-                  ]}
-                  connectHandler={(data) => handleConnect('SQL', data)}
-                />
-              </TabsContent>
-              <TabsContent value="excel">
-                <DataSourceForm
-                  title="Excel Connection"
-                  description="Connect to your Excel files"
-                  icon={FileSpreadsheet}
-                  fields={[
-                    { name: 'filepath', label: 'File Path', type: 'text', placeholder: 'C:/path/to/file.xlsx' },
-                    { name: 'sheet', label: 'Sheet Name (optional)', type: 'text', placeholder: 'Sheet1' },
-                  ]}
-                  connectHandler={(data) => handleConnect('Excel', data)}
-                />
-              </TabsContent>
-              <TabsContent value="azure">
-                <DataSourceForm
-                  title="Azure SQL Connection"
-                  description="Connect to your Azure SQL database"
-                  icon={Cloud}
-                  fields={[
-                    { name: 'server', label: 'Server', type: 'text', placeholder: 'e.g. myserver.database.windows.net' },
-                    { name: 'database', label: 'Database', type: 'text', placeholder: 'e.g. AdventureWorks' },
-                    { name: 'username', label: 'Username', type: 'text', placeholder: 'e.g. azureuser' },
-                    { name: 'password', label: 'Password', type: 'password', placeholder: '••••••••' },
-                  ]}
-                  connectHandler={(data) => handleConnect('Azure', data)}
-                />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+                  )}
+                  
+                  <ScrollArea className="h-[400px]">
+                    {workbookDs.connections.length > 0 ? (
+                      workbookDs.connections.map((connection) => (
+                        <ConnectionCard
+                          key={connection.connection_id}
+                          connection={connection}
+                        />
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No connections found in this workbook
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Database className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">
+                {searchQuery 
+                  ? `No data sources matching "${searchQuery}" were found` 
+                  : selectedWorkbook 
+                    ? `No data sources found in workbook "${selectedWorkbook.name}"` 
+                    : 'No workbook selected. Please select a workbook to view its data sources.'}
+              </p>
+              {!selectedWorkbook && (
+                <Button 
+                  variant="outline" 
+                  className="mt-4"
+                  onClick={() => navigate('/workbooks')}
+                >
+                  Go to Workbooks
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

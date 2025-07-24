@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BarChart3, FileText, Calculator, Database, BookOpen } from 'lucide-react';
+import { BarChart3, BookOpen } from 'lucide-react';
 
 const resources = [
   {
@@ -17,29 +17,34 @@ const resources = [
     icon: BarChart3,
     link: '/specs/dashboards',
   },
-  {
-    title: 'Views/Sheets',
-    description: 'Browse and explore views or sheets in this project',
-    icon: FileText,
-    link: '/specs/sheets',
-  },
-  {
-    title: 'Custom Calculations',
-    description: 'Convert and transform custom calculations',
-    icon: Calculator,
-    link: '/specs/customcalculation',
-  },
-  {
-    title: 'Data Sources',
-    description: 'Access and manage data sources',
-    icon: Database,
-    link: '/specs/datasources',
-  },
 ];
 
 const SpecsProjectResources = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
+
+  // Helper to get project object by ID from localStorage (populated by Specs page)
+  const getProjectById = (id) => {
+    try {
+      const projectsRaw = localStorage.getItem('projects');
+      if (projectsRaw) {
+        const projects = JSON.parse(projectsRaw);
+        return projects.find((p) => p.id === id);
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const handleResourceClick = (resource) => {
+    if (projectId) {
+      let project = getProjectById(projectId);
+      if (!project) {
+        project = { id: projectId, name: `Project ${projectId}` };
+      }
+      localStorage.setItem('selectedProject', JSON.stringify(project));
+    }
+    navigate(resource.link);
+  };
 
   return (
     <div className="container px-4 mx-auto animate-fade-in">
@@ -67,7 +72,7 @@ const SpecsProjectResources = () => {
                 {resource.description}
               </CardDescription>
             </CardContent>
-            <Button variant="outline" className="mt-auto" onClick={() => navigate(resource.link)}>
+            <Button variant="outline" className="mt-auto" onClick={() => handleResourceClick(resource)}>
               View
             </Button>
           </Card>

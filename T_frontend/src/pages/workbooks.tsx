@@ -216,7 +216,7 @@ const WorkbooksPage: React.FC = () => {
         
         // If 'all' is selected, fetch all workbooks, otherwise filter by project
         const fetchedWorkbooks = selectedProject === 'all' 
-          ? await apiService.getAllWorkbooks() 
+          ? await apiService.getWorkbooks() 
           : await apiService.getWorkbooks(selectedProject);
           
         console.log('Fetched workbooks:', fetchedWorkbooks);

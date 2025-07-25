@@ -3,39 +3,34 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ExternalLink, BarChart3, Database } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
-  const [tableauCredentials, setTableauCredentials] = useState({
-    username: '',
-    password: ''
-  });
-  const [microstrategyCredentials, setMicrostrategyCredentials] = useState({
-    username: '',
-    password: ''
-  });
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleTableauLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     
     // Simple validation
-    if (!tableauCredentials.username || !tableauCredentials.password) {
+    if (!username || !password) {
       toast({
         title: "Error",
         description: "Please enter both username and password",
         variant: "destructive"
       });
+      setIsLoading(false);
       return;
     }
 
     // Set authentication for Tableau project
     localStorage.setItem('isAuthenticated', 'true');
-    localStorage.setItem('userId', tableauCredentials.username);
+    localStorage.setItem('userId', username);
     localStorage.setItem('projectType', 'tableau');
     
     toast({
@@ -45,136 +40,104 @@ const Login = () => {
     
     // Navigate to current application (localhost:8080)
     navigate('/');
+    setIsLoading(false);
   };
 
-  const handleMicrostrategyLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Simple validation
-    if (!microstrategyCredentials.username || !microstrategyCredentials.password) {
-      toast({
-        title: "Error",
-        description: "Please enter both username and password",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    toast({
-      title: "Success", 
-      description: "Redirecting to Microstrategy project..."
-    });
-    
+  const handleMicrostrategyRedirect = () => {
     // Redirect to Microstrategy project (localhost:8081)
-    window.location.href = 'http://localhost:8081';
+    window.location.href = 'http://localhost:8081/login';
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="bg-primary/10 p-3 rounded-full">
-              <BarChart3 className="h-8 w-8 text-primary" />
-            </div>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8">
+        <div className="flex flex-col items-center">
+          {/* Orange/Red Z Logo */}
+          <div className="mb-6">
+            <img
+              src="/lovable-uploads/5e80d876-2fd7-45b1-b83e-f943d53a9209.png"
+              alt="BI Accelerator Logo"
+              className="w-24 h-24"
+            />
           </div>
-          <h1 className="text-2xl font-bold">Project Portal</h1>
-          <p className="text-muted-foreground">Choose your project and sign in</p>
+          <h1 className="text-3xl font-bold tracking-tight mb-2 text-center text-gray-900">BI Accelerator</h1>
+          <p className="text-gray-600 text-center mb-8">
+            Login to access the BI acceleration platform
+          </p>
         </div>
 
-        <Tabs defaultValue="tableau" className="w-full">
-          {/* <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="tableau">Tableau (localhost:8080)</TabsTrigger>
-            <TabsTrigger value="microstrategy">Microstrategy (localhost:8081)</TabsTrigger>
-          </TabsList> */}
-          
-          <TabsContent value="tableau">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Tableau Migration Tool
-                </CardTitle>
-                <CardDescription>
-                  Sign in to access the Tableau to Power BI migration tool (localhost:8080)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleTableauLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="tableau-username">Username</Label>
-                    <Input
-                      id="tableau-username"
-                      type="text"
-                      placeholder="Enter your username"
-                      value={tableauCredentials.username}
-                      onChange={(e) => setTableauCredentials({...tableauCredentials, username: e.target.value})}
-                    />
+        {/* Login Switcher Buttons - moved here */}
+        <div className="flex gap-2 justify-center mb-6">
+          <Button
+            variant="default"
+            className="bg-brand-500 hover:bg-brand-600 text-white"
+            disabled
+          >
+            Tableau Login
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleMicrostrategyRedirect}
+            className="bg-[#FFC89B] hover:bg-[#FFB578] text-white border-none px-6 py-2 rounded-md"
+          >
+            Microstrategy Login
+          </Button>
+        </div>
+        
+        <Card className="p-6 shadow-lg border border-gray-200 bg-gradient-to-br from-orange-50 to-white">
+          <form onSubmit={handleTableauLogin} className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-gray-700 font-medium">Username</Label>
+                <Input
+                  id="username"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  className="border-gray-300 focus-visible:ring-orange-500 focus-visible:border-orange-500"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  className="border-gray-300 focus-visible:ring-orange-500 focus-visible:border-orange-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-medium py-3 rounded-lg"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <div className="flex items-center">
+                    <span className="animate-spin mr-2">⟳</span> Signing in...
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tableau-password">Password</Label>
-                    <Input
-                      id="tableau-password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={tableauCredentials.password}
-                      onChange={(e) => setTableauCredentials({...tableauCredentials, password: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button type="submit" className="w-full">
-                    Log in with Tableau
-                    </Button>
-                    <Link to="http://localhost:8081/login" className="text-brand-500 hover:text-brand-600 text-sm text-center">
-                      Log in to Microstrategy?
-                    </Link>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="microstrategy">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Database className="h-5 w-5" />
-                  Microstrategy Project
-                </CardTitle>
-                <CardDescription>
-                  Sign in to access the Microstrategy project (localhost:8081)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleMicrostrategyLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="micro-username">Username</Label>
-                    <Input
-                      id="micro-username"
-                      type="text"
-                      placeholder="Enter your username"
-                      value={microstrategyCredentials.username}
-                      onChange={(e) => setMicrostrategyCredentials({...microstrategyCredentials, username: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="micro-password">Password</Label>
-                    <Input
-                      id="micro-password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={microstrategyCredentials.password}
-                      onChange={(e) => setMicrostrategyCredentials({...microstrategyCredentials, password: e.target.value})}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full">
-                    Sign In to Microstrategy
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                ) : (
+                  'Log in with Tableau'
+                )}
+              </Button>
+                             <Link 
+                 to="http://localhost:8081/login" 
+                 className="text-orange-500 hover:text-orange-600 text-sm text-center font-medium"
+               >
+                 Log in to Microstrategy?
+               </Link>
+            </div>
+          </form>
+        </Card>
       </div>
     </div>
   );

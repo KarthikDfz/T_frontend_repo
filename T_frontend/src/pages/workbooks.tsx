@@ -928,30 +928,6 @@ const WorkbooksPage: React.FC = () => {
                                   <CheckCircle2 className="h-4 w-4 text-primary" />
                                 )}
                               </div>
-                              <p className="text-sm text-muted-foreground">
-                                {workbook.description}
-                              </p>
-                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  {workbook.owner}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
-                                  {workbook.lastModified}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline">
-                                  {workbook.dashboardCount} dashboard(s)
-                                </Badge>
-                                <Badge variant="outline">
-                                  {workbook.calculationCount} calculation(s)
-                                </Badge>
-                                <Badge variant="secondary">
-                                  {workbook.size}
-                                </Badge>
-                              </div>
                             </div>
                           </div>
                           

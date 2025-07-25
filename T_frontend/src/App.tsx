@@ -17,7 +17,7 @@ import DataSourcesPage from "./pages/Datasources";
 import WorkbooksPage from "./pages/workbooks";
 import DashboardsPage from "./pages/Dashboards";
 import ViewsPage from "./pages/Views";
-import MigrationHistoryPage from "./pages/Migrationhistory";
+//import MigrationHistoryPage from "./pages/Migrationhistory";
 import SpecsPage from "./pages/Specs";
 import SpecsProjectResources from "./pages/SpecsProjectResources";
 import SpecsWorkbooksPage from "./pages/SpecsWorkbooks";
@@ -132,13 +132,13 @@ const App = () => (
                 </AuthenticatedLayout>
               </ProtectedRoute>
             } />
-            <Route path="/history" element={
+          {/* <Route path="/history" element={ 
               <ProtectedRoute>
                 <AuthenticatedLayout>
                   <MigrationHistoryPage />
-                </AuthenticatedLayout>
+                </AuthenticatedLayout> 
               </ProtectedRoute>
-            } />
+           } /> */}
             <Route path="/specs" element={
               <ProtectedRoute>
                 <AuthenticatedLayout>

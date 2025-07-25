@@ -89,6 +89,51 @@ export interface ConvertedAttribute {
   }[];
 }
 
+export interface MigrateWorkbookRequest {
+  workbook_name: string;
+  powerbi_workspace?: string;
+  convert_calculated_fields: boolean;
+  create_powerbi_model: boolean;
+  generate_relationship_code: boolean;
+}
+
+export interface MigrateWorkbookResponse {
+  status: string;
+  workbook_name: string;
+  database?: string;
+  extraction_time?: string;
+  tableau_tables?: {
+    table_count: number;
+    total_columns: number;
+    tables_and_columns: Record<string, any>;
+  };
+  powerbi_schema?: {
+    table_count: number;
+    relationship_count: number;
+    tables: Record<string, any>;
+  };
+  relationships?: any[];
+  output_files?: {
+    tables_json: string;
+    powerbi_schema: string;
+  };
+  dax_conversion?: {
+    status: string;
+    measures_converted: number;
+    measures?: Array<{ name: string; dax_formula: string }>;
+    message?: string;
+    error?: string;
+  };
+  powerbi_model?: {
+    status: string;
+    task_id?: string;
+    model_name?: string;
+    workspace?: string;
+    message: string;
+  };
+  powerbi_relationship_code?: string;
+}
+
 // Base URL for API calls
 const API_BASE_URL = 'http://localhost:8001';
 
@@ -584,6 +629,64 @@ async getWorkbookCalculations(workbookId: string, workbookName?: string): Promis
       throw error;
     }
   }
+
+  /**
+   * Migrate a Tableau workbook to Power BI
+   * @param request Migration request parameters
+   * @returns Promise with migration response
+   */
+  async migrateWorkbookToPowerBI(request: MigrateWorkbookRequest): Promise<MigrateWorkbookResponse> {
+    try {
+      console.log('Migrating workbook to Power BI:', request);
+      
+      const endpoint = `${API_BASE_URL}/tableau/migrate_workbook`;
+      console.log(`API Request: POST ${endpoint}`);
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+      
+      console.log(`Response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Migration response:', data);
+      
+      return data;
+    } catch (error) {
+      console.error('Error migrating workbook:', error);
+      throw error;
+    }
+  }
+  /**
+ * Check the status of a Power BI model creation task
+ * @param taskId The task ID returned from migration
+ * @returns Promise with task status
+ */
+async checkModelCreationStatus(taskId: string): Promise<any> {
+  try {
+    const endpoint = `${API_BASE_URL}/tableau/model-creation-status/${taskId}`;
+    const response = await fetch(endpoint);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error checking model creation status:', error);
+    throw error;
+  }
+}
 
 }
 

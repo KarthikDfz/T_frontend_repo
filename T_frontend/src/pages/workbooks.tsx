@@ -6,7 +6,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Workbook as WorkbookType, Project as ApiProject } from '@/services/api';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
+import { Workbook as WorkbookType, Project as ApiProject, MigrateWorkbookRequest, MigrateWorkbookResponse } from '@/services/api';
 import { 
   Info, 
   Calendar, 
@@ -27,7 +31,10 @@ import {
   Filter,
   ExternalLink,
   Tag,
-  FolderOpen
+  FolderOpen,
+  Zap,
+  Check,
+  Circle
 } from 'lucide-react';
 import { apiService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
@@ -67,6 +74,12 @@ interface Project {
   name: string;
 }
 
+interface MigrationStatus {
+  step: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'error';
+  message?: string;
+}
+
 const WorkbooksPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedProject, setSelectedProject] = useState<string>('all');
@@ -81,9 +94,21 @@ const WorkbooksPage: React.FC = () => {
   const [showProjectFilter, setShowProjectFilter] = useState<boolean>(false);
   const [exporting, setExporting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Migration dialog states
+  const [showMigrateDialog, setShowMigrateDialog] = useState<boolean>(false);
+  const [isMigrating, setIsMigrating] = useState<boolean>(false);
+  const [semanticModelName, setSemanticModelName] = useState<string>('');
+  const [biWorkspace, setBiWorkspace] = useState<string>('');
+  const [migrationError, setMigrationError] = useState<string | null>(null);
+  const [migrationStatuses, setMigrationStatuses] = useState<MigrationStatus[]>([]);
+  const [migrationProgress, setMigrationProgress] = useState<number>(0);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  
   const { toast } = useToast();
   const workbooksContainerRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Click outside handler for filter dropdown
   useEffect(() => {
@@ -101,6 +126,15 @@ const WorkbooksPage: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showProjectFilter]);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
   
   // Fetch projects
   const fetchProjects = async () => {
@@ -179,6 +213,192 @@ const WorkbooksPage: React.FC = () => {
       setWorkbookDetails(null);
     } finally {
       setIsLoadingDetails(false);
+    }
+  };
+
+  // Handle migration
+  const handleMigrateToPowerBI = () => {
+    if (!selectedWorkbook || !workbookDetails) return;
+    
+    // Pre-fill semantic model name with workbook name
+    setSemanticModelName(workbookDetails.name);
+    setBiWorkspace('');
+    setMigrationError(null);
+    setMigrationStatuses([]);
+    setMigrationProgress(0);
+    setShowMigrateDialog(true);
+  };
+
+  const updateMigrationStatus = (step: string, status: 'pending' | 'in-progress' | 'completed' | 'error', message?: string) => {
+    setMigrationStatuses(prev => {
+      const existing = prev.find(s => s.step === step);
+      if (existing) {
+        return prev.map(s => s.step === step ? { ...s, status, message } : s);
+      }
+      return [...prev, { step, status, message }];
+    });
+  };
+
+  const pollForTaskStatus = async (taskId: string) => {
+    try {
+      const status = await apiService.checkModelCreationStatus(taskId);
+      console.log('Task status:', status);
+      
+      if (status.status === 'completed') {
+        updateMigrationStatus('Creating Power BI Model', 'completed', 'Model created successfully');
+        setMigrationProgress(100);
+        
+        // Clear polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        
+        // Show success and close dialog after 2 seconds
+        setTimeout(() => {
+          toast({
+            title: "Migration Complete!",
+            description: `Power BI model '${semanticModelName}' has been successfully created in workspace '${status.workspace}'.`,
+          });
+          setShowMigrateDialog(false);
+          resetMigrationState();
+        }, 2000);
+        
+      } else if (status.status === 'failed') {
+        updateMigrationStatus('Creating Power BI Model', 'error', status.error || 'Model creation failed');
+        setMigrationError(status.error || 'Model creation failed');
+        
+        // Clear polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setIsMigrating(false);
+      }
+      // If status is 'in_progress' or 'pending', continue polling
+    } catch (error) {
+      console.error('Error polling task status:', error);
+      // Continue polling even if there's an error
+    }
+  };
+
+  const resetMigrationState = () => {
+    setSemanticModelName('');
+    setBiWorkspace('');
+    setMigrationError(null);
+    setMigrationStatuses([]);
+    setMigrationProgress(0);
+    setCurrentTaskId(null);
+    setIsMigrating(false);
+  };
+
+  const handleMigrationSubmit = async () => {
+    if (!selectedWorkbook || !workbookDetails) return;
+    
+    setIsMigrating(true);
+    setMigrationError(null);
+    setMigrationStatuses([]);
+    setMigrationProgress(0);
+    
+    try {
+      // Add debug logging
+      console.log('Migration Dialog Values:', {
+        semanticModelName,
+        biWorkspace,
+        biWorkspaceLength: biWorkspace.length,
+        biWorkspaceIsEmpty: biWorkspace === '',
+        biWorkspaceValue: `"${biWorkspace}"`
+      });
+      
+      // Initialize status steps
+      updateMigrationStatus('Initiating Migration', 'in-progress');
+      setMigrationProgress(10);
+      
+      const migrationRequest: MigrateWorkbookRequest = {
+        workbook_name: workbookDetails.name,
+        powerbi_workspace: biWorkspace || undefined,  // This sends undefined if empty
+        convert_calculated_fields: true,
+        create_powerbi_model: true,
+        generate_relationship_code: true
+      };
+      
+      // Log the actual request
+      console.log('Migration Request being sent:', migrationRequest);
+      console.log('Workspace value in request:', migrationRequest.powerbi_workspace);
+      
+      const response: MigrateWorkbookResponse = await apiService.migrateWorkbookToPowerBI(migrationRequest);
+      
+      if (response.status === 'success') {
+        updateMigrationStatus('Initiating Migration', 'completed');
+        setMigrationProgress(20);
+        
+        // Show schema extraction status
+        if (response.tableau_tables && response.tableau_tables.table_count > 0) {
+          updateMigrationStatus('Extracting Schema', 'in-progress');
+          setMigrationProgress(30);
+          
+          setTimeout(() => {
+            updateMigrationStatus('Extracting Schema', 'completed', 
+              `Extracted ${response.tableau_tables?.table_count} tables with ${response.tableau_tables?.total_columns} columns`);
+            setMigrationProgress(40);
+          }, 1000);
+        }
+        
+        // Show relationships mapping status
+        if (response.powerbi_schema && response.powerbi_schema.relationship_count > 0) {
+          setTimeout(() => {
+            updateMigrationStatus('Mapping Relationships', 'in-progress');
+            setMigrationProgress(50);
+            
+            setTimeout(() => {
+              updateMigrationStatus('Mapping Relationships', 'completed', 
+                `Created ${response.powerbi_schema?.relationship_count} relationships`);
+              setMigrationProgress(60);
+            }, 1000);
+          }, 2000);
+        }
+        
+        // Show DAX conversion status
+        if (response.dax_conversion && response.dax_conversion.status === 'success') {
+          setTimeout(() => {
+            updateMigrationStatus('Converting Calculations', 'in-progress');
+            setMigrationProgress(70);
+            
+            setTimeout(() => {
+              updateMigrationStatus('Converting Calculations', 'completed', 
+                `Converted ${response.dax_conversion?.measures_converted} calculated fields to DAX`);
+              setMigrationProgress(80);
+            }, 1000);
+          }, 3000);
+        }
+        
+        // Show Power BI model creation status
+        if (response.powerbi_model?.status === 'creation_initiated' && response.powerbi_model.task_id) {
+          setTimeout(() => {
+            updateMigrationStatus('Creating Power BI Model', 'in-progress', 
+              `Connecting to workspace '${response.powerbi_model?.workspace}'...`);
+            setMigrationProgress(90);
+            
+            // Store task ID and start polling
+            setCurrentTaskId(response.powerbi_model!.task_id!);
+            
+            // Start polling for task status
+            pollingIntervalRef.current = setInterval(() => {
+              if (response.powerbi_model?.task_id) {
+                pollForTaskStatus(response.powerbi_model.task_id);
+              }
+            }, 3000); // Poll every 3 seconds
+          }, 4000);
+        }
+        
+      } else {
+        throw new Error(response.powerbi_model?.message || 'Migration failed');
+      }
+    } catch (error) {
+      console.error('Migration error:', error);
+      setMigrationError(error instanceof Error ? error.message : 'An unexpected error occurred during migration');
+      updateMigrationStatus('Migration Failed', 'error', error instanceof Error ? error.message : 'Unknown error');
+      setIsMigrating(false);
     }
   };
 
@@ -498,6 +718,19 @@ const WorkbooksPage: React.FC = () => {
     }
   };
 
+  const getStatusIcon = (status: 'pending' | 'in-progress' | 'completed' | 'error') => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case 'in-progress':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Circle className="h-4 w-4 text-gray-300" />;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -791,13 +1024,26 @@ const WorkbooksPage: React.FC = () => {
           <div>
             <Card className="shadow-md h-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Info className="h-5 w-5 text-primary" />
-                  Workbook Details
-                </CardTitle>
-                <CardDescription>
-                  {selectedWorkbook ? 'Selected workbook information' : 'Select a workbook to view details'}
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Info className="h-5 w-5 text-primary" />
+                      Workbook Details
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedWorkbook ? 'Selected workbook information' : 'Select a workbook to view details'}
+                    </CardDescription>
+                  </div>
+                  {selectedWorkbook && workbookDetails && (
+                    <Button
+                      onClick={handleMigrateToPowerBI}
+                      className="gap-2"
+                    >
+                      <Zap className="h-4 w-4" />
+                      Migrate to Power BI
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoadingDetails ? (
@@ -921,6 +1167,122 @@ const WorkbooksPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Migration Dialog */}
+      <Dialog open={showMigrateDialog} onOpenChange={setShowMigrateDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Migrate to Power BI</DialogTitle>
+            <DialogDescription>
+              {isMigrating 
+                ? "Migration in progress. Please wait while we create your Power BI model."
+                : "Configure the migration settings for your Tableau workbook to Power BI."
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          {!isMigrating ? (
+            <>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="semanticModelName">Semantic Model Name</Label>
+                  <Input
+                    id="semanticModelName"
+                    value={semanticModelName}
+                    onChange={(e) => setSemanticModelName(e.target.value)}
+                    placeholder={workbookDetails?.name || "Enter model name"}
+                    className="placeholder:text-muted-foreground/50"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This will be the name of your Power BI semantic model
+                  </p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="biWorkspace">BI Workspace</Label>
+                  <Input
+                    id="biWorkspace"
+                    value={biWorkspace}
+                    onChange={(e) => setBiWorkspace(e.target.value)}
+                    placeholder="Leave blank to use default workspace"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional: Specify a Power BI workspace or use the default
+                  </p>
+                </div>
+                
+                {migrationError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{migrationError}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+              
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowMigrateDialog(false)}
+                  disabled={isMigrating}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleMigrationSubmit}
+                  disabled={isMigrating || !semanticModelName.trim()}
+                >
+                  <Zap className="mr-2 h-4 w-4" />
+                  Start Migration
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="space-y-4 py-4">
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Progress</span>
+                    <span>{migrationProgress}%</span>
+                  </div>
+                  <Progress value={migrationProgress} className="h-2" />
+                </div>
+                
+                {/* Migration Status Steps */}
+                <div className="space-y-3 mt-6">
+                  {migrationStatuses.map((status, index) => (
+                    <div key={index} className="flex items-start gap-3">
+                      {getStatusIcon(status.status)}
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{status.step}</p>
+                        {status.message && (
+                          <p className="text-xs text-muted-foreground mt-1">{status.message}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {migrationError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{migrationError}</AlertDescription>
+                  </Alert>
+                )}
+                
+                {migrationProgress === 100 && (
+                  <Alert className="border-green-200 bg-green-50">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      Migration completed successfully! Your Power BI model is ready.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

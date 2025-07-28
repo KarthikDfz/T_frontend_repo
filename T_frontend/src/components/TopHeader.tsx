@@ -29,15 +29,12 @@ export const TopHeader: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-16 items-center px-4 gap-4">
+    <header className="sticky top-0 z-62 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-16 items-center px-4 gap-3">
         <SidebarTrigger className="transition-apple" />
         
         <div className="flex items-center gap-2 ml-auto">
-          {/* Search Icon */}
-          <Button variant="ghost" size="icon" className="transition-apple">
-            <Search className="h-4 w-4" />
-          </Button>
+
 
           {/* Theme Toggle */}
           <Button 
@@ -54,10 +51,6 @@ export const TopHeader: React.FC = () => {
             )}
           </Button>
 
-          {/* Bell Icon */}
-          <Button variant="ghost" size="icon" className="transition-apple">
-            <Bell className="h-4 w-4" />
-          </Button>
 
           {/* User Avatar */}
           <DropdownMenu>

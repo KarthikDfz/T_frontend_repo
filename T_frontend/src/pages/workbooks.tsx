@@ -95,7 +95,6 @@ const WorkbooksPage: React.FC = () => {
   const [exporting, setExporting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Migration dialog states
   const [showMigrateDialog, setShowMigrateDialog] = useState<boolean>(false);
   const [isMigrating, setIsMigrating] = useState<boolean>(false);
   const [semanticModelName, setSemanticModelName] = useState<string>('');
@@ -110,7 +109,6 @@ const WorkbooksPage: React.FC = () => {
   const filterRef = useRef<HTMLDivElement>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Click outside handler for filter dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
@@ -127,7 +125,6 @@ const WorkbooksPage: React.FC = () => {
     };
   }, [showProjectFilter]);
   
-  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollingIntervalRef.current) {
@@ -136,7 +133,6 @@ const WorkbooksPage: React.FC = () => {
     };
   }, []);
   
-  // Fetch projects
   const fetchProjects = async () => {
     try {
       setIsLoadingProjects(true);
@@ -144,9 +140,7 @@ const WorkbooksPage: React.FC = () => {
       const apiProjects = await apiService.getProjects();
       console.log('Raw API projects response:', apiProjects);
       
-      // Handle the response - it should already be an array of projects
       if (Array.isArray(apiProjects) && apiProjects.length > 0) {
-        // Transform API projects to our format and add "All Projects" option
         const formattedProjects: Project[] = [
           { id: 'all', name: 'All Projects' },
           ...apiProjects.map((project: ApiProject) => ({
@@ -159,12 +153,10 @@ const WorkbooksPage: React.FC = () => {
         setProjects(formattedProjects);
       } else {
         console.log('No projects returned from API or invalid format');
-        // Set default projects list with just "All Projects"
         setProjects([{ id: 'all', name: 'All Projects' }]);
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
-      // Keep the "All Projects" option even on error
       setProjects([{ id: 'all', name: 'All Projects' }]);
       toast({
         title: "Error loading projects",
@@ -176,7 +168,6 @@ const WorkbooksPage: React.FC = () => {
     }
   };
 
-  // Fetch workbook details
   const fetchWorkbookDetails = async (workbookId: string) => {
     try {
       setIsLoadingDetails(true);
@@ -185,7 +176,6 @@ const WorkbooksPage: React.FC = () => {
       const details: any = await apiService.getWorkbookDetails(workbookId);
       console.log('Fetched workbook details:', details);
       
-      // Convert API response to WorkbookDetails format
       const workbookDetails: WorkbookDetails = {
         id: details.id || workbookId,
         name: details.name || details.workbook_name || 'Unnamed Workbook',
@@ -216,11 +206,9 @@ const WorkbooksPage: React.FC = () => {
     }
   };
 
-  // Handle migration
   const handleMigrateToPowerBI = () => {
     if (!selectedWorkbook || !workbookDetails) return;
     
-    // Pre-fill semantic model name with workbook name
     setSemanticModelName(workbookDetails.name);
     setBiWorkspace('');
     setMigrationError(null);
@@ -248,13 +236,11 @@ const WorkbooksPage: React.FC = () => {
         updateMigrationStatus('Creating Power BI Model', 'completed', 'Model created successfully');
         setMigrationProgress(100);
         
-        // Clear polling
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
         
-        // Show success and close dialog after 2 seconds
         setTimeout(() => {
           toast({
             title: "Migration Complete!",
@@ -268,17 +254,14 @@ const WorkbooksPage: React.FC = () => {
         updateMigrationStatus('Creating Power BI Model', 'error', status.error || 'Model creation failed');
         setMigrationError(status.error || 'Model creation failed');
         
-        // Clear polling
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
         setIsMigrating(false);
       }
-      // If status is 'in_progress' or 'pending', continue polling
     } catch (error) {
       console.error('Error polling task status:', error);
-      // Continue polling even if there's an error
     }
   };
 
@@ -301,7 +284,6 @@ const WorkbooksPage: React.FC = () => {
     setMigrationProgress(0);
     
     try {
-      // Add debug logging
       console.log('Migration Dialog Values:', {
         semanticModelName,
         biWorkspace,
@@ -310,19 +292,17 @@ const WorkbooksPage: React.FC = () => {
         biWorkspaceValue: `"${biWorkspace}"`
       });
       
-      // Initialize status steps
       updateMigrationStatus('Initiating Migration', 'in-progress');
       setMigrationProgress(10);
       
       const migrationRequest: MigrateWorkbookRequest = {
         workbook_name: workbookDetails.name,
-        powerbi_workspace: biWorkspace || undefined,  // This sends undefined if empty
+        powerbi_workspace: biWorkspace || undefined,
         convert_calculated_fields: true,
         create_powerbi_model: true,
         generate_relationship_code: true
       };
       
-      // Log the actual request
       console.log('Migration Request being sent:', migrationRequest);
       console.log('Workspace value in request:', migrationRequest.powerbi_workspace);
       
@@ -332,7 +312,6 @@ const WorkbooksPage: React.FC = () => {
         updateMigrationStatus('Initiating Migration', 'completed');
         setMigrationProgress(20);
         
-        // Show schema extraction status
         if (response.tableau_tables && response.tableau_tables.table_count > 0) {
           updateMigrationStatus('Extracting Schema', 'in-progress');
           setMigrationProgress(30);
@@ -344,7 +323,6 @@ const WorkbooksPage: React.FC = () => {
           }, 1000);
         }
         
-        // Show relationships mapping status
         if (response.powerbi_schema && response.powerbi_schema.relationship_count > 0) {
           setTimeout(() => {
             updateMigrationStatus('Mapping Relationships', 'in-progress');
@@ -358,7 +336,6 @@ const WorkbooksPage: React.FC = () => {
           }, 2000);
         }
         
-        // Show DAX conversion status
         if (response.dax_conversion && response.dax_conversion.status === 'success') {
           setTimeout(() => {
             updateMigrationStatus('Converting Calculations', 'in-progress');
@@ -372,22 +349,19 @@ const WorkbooksPage: React.FC = () => {
           }, 3000);
         }
         
-        // Show Power BI model creation status
         if (response.powerbi_model?.status === 'creation_initiated' && response.powerbi_model.task_id) {
           setTimeout(() => {
             updateMigrationStatus('Creating Power BI Model', 'in-progress', 
               `Connecting to workspace '${response.powerbi_model?.workspace}'...`);
             setMigrationProgress(90);
             
-            // Store task ID and start polling
             setCurrentTaskId(response.powerbi_model!.task_id!);
             
-            // Start polling for task status
             pollingIntervalRef.current = setInterval(() => {
               if (response.powerbi_model?.task_id) {
                 pollForTaskStatus(response.powerbi_model.task_id);
               }
-            }, 3000); // Poll every 3 seconds
+            }, 3000);
           }, 4000);
         }
         
@@ -402,19 +376,16 @@ const WorkbooksPage: React.FC = () => {
     }
   };
 
-  // Initial fetch of projects
   useEffect(() => {
     console.log('Component mounted, fetching projects...');
     fetchProjects();
   }, []);
   
-  // Get project ID from URL if available
   useEffect(() => {
     const projectId = searchParams.get('projectId');
     if (projectId) {
       setSelectedProject(projectId);
       
-      // If we came from the projects page, use the stored project name
       const projectName = localStorage.getItem('selectedProjectName');
       if (projectName) {
         toast({
@@ -425,7 +396,6 @@ const WorkbooksPage: React.FC = () => {
     }
   }, [searchParams, toast]);
 
-  // Fetch workbooks when selected project changes
   useEffect(() => {
     const fetchWorkbooks = async () => {
       try {
@@ -434,14 +404,12 @@ const WorkbooksPage: React.FC = () => {
         
         console.log('Fetching workbooks for project:', selectedProject);
         
-        // If 'all' is selected, fetch all workbooks, otherwise filter by project
         const fetchedWorkbooks = selectedProject === 'all' 
           ? await apiService.getWorkbooks() 
           : await apiService.getWorkbooks(selectedProject);
           
         console.log('Fetched workbooks:', fetchedWorkbooks);
         
-        // Transform the API response to match our workbook interface
         const formattedWorkbooks: Workbook[] = fetchedWorkbooks.map((wb: WorkbookType, index: number) => {
           const workbookId = wb.id || wb.workbook_id || wb.luid || `fallback-${index}`;
           
@@ -456,18 +424,16 @@ const WorkbooksPage: React.FC = () => {
             owner: wb.owner_id || 'Unknown Owner',
             lastModified: wb.updated_at?.split('T')[0] || 'Unknown date',
             size: wb.size ? `${((wb.size || 0) / (1024 * 1024)).toFixed(1)} MB` : '0 MB',
-            dashboardCount: 3, // This would come from a real API count of views
-            calculationCount: 5, // This would need to be fetched separately
+            dashboardCount: 3,
+            calculationCount: 5,
             projectId: wb.project_id || 'unknown'
           };
         });
         
         setWorkbooks(formattedWorkbooks);
-        // Clear selected workbook when changing projects
         setSelectedWorkbook(null);
         setWorkbookDetails(null);
         
-        // If this is the first successful fetch, show a success message
         if (isLoadingWorkbooks && !error && formattedWorkbooks.length > 0) {
           toast({
             title: "Workbooks Loaded",
@@ -492,7 +458,32 @@ const WorkbooksPage: React.FC = () => {
     fetchWorkbooks();
   }, [selectedProject, toast]);
 
-  // Filter workbooks based on search term
+  useEffect(() => {
+    const storedWorkbookStr = localStorage.getItem('selectedWorkbook');
+    if (storedWorkbookStr) {
+      try {
+        const storedWorkbook = JSON.parse(storedWorkbookStr);
+        
+        const matchingWorkbook = workbooks.find(wb => wb.id === storedWorkbook.id);
+        
+        if (matchingWorkbook) {
+          setSelectedWorkbook(matchingWorkbook);
+          fetchWorkbookDetails(matchingWorkbook.id);
+          
+          toast({
+            title: "Selection restored",
+            description: `Restored selection for "${matchingWorkbook.name}"`,
+          });
+        } else if (workbooks.length > 0) {
+          localStorage.removeItem('selectedWorkbook');
+        }
+      } catch (error) {
+        console.error('Error restoring workbook selection:', error);
+        localStorage.removeItem('selectedWorkbook');
+      }
+    }
+  }, [workbooks]);
+
   const filteredWorkbooks = workbooks.filter(workbook => {
     return workbook.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
            workbook.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -503,7 +494,6 @@ const WorkbooksPage: React.FC = () => {
     setSelectedProject(projectId);
     setShowProjectFilter(false);
     
-    // Update URL
     if (projectId === 'all') {
       searchParams.delete('projectId');
     } else {
@@ -511,7 +501,6 @@ const WorkbooksPage: React.FC = () => {
     }
     setSearchParams(searchParams);
     
-    // Clear workbook selection when changing projects
     setSelectedWorkbook(null);
     setWorkbookDetails(null);
   };
@@ -519,10 +508,8 @@ const WorkbooksPage: React.FC = () => {
   const handleWorkbookSelect = (workbook: Workbook) => {
     setSelectedWorkbook(workbook);
     
-    // Fetch detailed workbook information
     fetchWorkbookDetails(workbook.id);
     
-    // Store the selected workbook in localStorage for other components to access
     localStorage.setItem('selectedWorkbook', JSON.stringify({
       id: workbook.id,
       name: workbook.name,
@@ -538,7 +525,6 @@ const WorkbooksPage: React.FC = () => {
   const handleViewDashboards = (workbook: Workbook) => {
     console.log('Navigating to views with workbook:', workbook);
     
-    // Validate workbook ID
     if (!workbook.id || workbook.id === 'undefined') {
       toast({
         title: "Invalid Workbook",
@@ -548,7 +534,6 @@ const WorkbooksPage: React.FC = () => {
       return;
     }
     
-    // Store the workbook info in localStorage as backup
     const workbookInfo = {
       id: workbook.id,
       name: workbook.name,
@@ -559,7 +544,6 @@ const WorkbooksPage: React.FC = () => {
     localStorage.setItem('selectedWorkbook', JSON.stringify(workbookInfo));
     console.log('Stored workbook in localStorage:', workbookInfo);
     
-    // Navigate to the sheets page with workbook information in URL parameters
     const url = `/sheets?workbookId=${encodeURIComponent(workbook.id)}&workbookName=${encodeURIComponent(workbook.name)}&projectId=${encodeURIComponent(workbook.projectId || '')}`;
     console.log('Navigating to Views page:', url);
     window.location.href = url;
@@ -568,7 +552,6 @@ const WorkbooksPage: React.FC = () => {
   const handleViewCalculations = (workbook: Workbook) => {
     console.log('Navigating to calculations with workbook:', workbook);
     
-    // Validate workbook ID
     if (!workbook.id || workbook.id === 'undefined') {
       toast({
         title: "Invalid Workbook",
@@ -578,7 +561,6 @@ const WorkbooksPage: React.FC = () => {
       return;
     }
     
-    // Store the workbook info in localStorage
     const workbookInfo = {
       id: workbook.id,
       name: workbook.name,
@@ -589,14 +571,12 @@ const WorkbooksPage: React.FC = () => {
     localStorage.setItem('selectedWorkbook', JSON.stringify(workbookInfo));
     console.log('Stored workbook in localStorage:', workbookInfo);
     
-    // Navigate to the custom calculations page with workbook information
     const url = `/customcalculation?workbookId=${encodeURIComponent(workbook.id)}&workbookName=${encodeURIComponent(workbook.name)}&projectId=${encodeURIComponent(workbook.projectId || '')}`;
     console.log('Navigating to Custom Calculations page:', url);
     window.location.href = url;
   };
 
   const handleViewDataSources = (workbook: Workbook) => {
-    // Store the workbook info in localStorage
     localStorage.setItem('selectedWorkbook', JSON.stringify({
       id: workbook.id,
       name: workbook.name,
@@ -604,12 +584,10 @@ const WorkbooksPage: React.FC = () => {
       projectId: workbook.projectId
     }));
     
-    // Navigate to the data sources page with workbook information
     window.location.href = `/datasources?workbookId=${workbook.id}&workbookName=${encodeURIComponent(workbook.name)}&projectId=${workbook.projectId}`;
   };
   
   const handleRefresh = async () => {
-    // Re-fetch projects and workbooks
     setWorkbooks([]);
     setSelectedWorkbook(null);
     setWorkbookDetails(null);
@@ -618,9 +596,7 @@ const WorkbooksPage: React.FC = () => {
       description: "Fetching the latest projects and workbooks..."
     });
     
-    // Refresh projects first
     await fetchProjects();
-    // The workbooks will be refreshed automatically via the useEffect
   };
 
   const getProjectName = (projectId: string) => {
@@ -647,18 +623,15 @@ const WorkbooksPage: React.FC = () => {
         description: "Generating your export, please wait...",
       });
       
-      // Create a timestamp for the filename
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const projectName = getProjectName(selectedProject);
       
-      // Set up PDF document
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "px",
         format: "a4"
       });
       
-      // Add title to PDF
       pdf.setFontSize(18);
       pdf.text("Tableau Workbooks Export", 40, 40);
       pdf.setFontSize(12);
@@ -668,25 +641,20 @@ const WorkbooksPage: React.FC = () => {
       pdf.setFontSize(10);
       pdf.text(`Total Workbooks: ${filteredWorkbooks.length}`, 40, 90);
       
-      // Capture the workbooks container as an image
       const canvas = await html2canvas(workbooksContainerRef.current, {
         scale: 2,
         logging: false,
         useCORS: true
       });
       
-      // Convert canvas to image
       const imgData = canvas.toDataURL('image/png');
       
-      // Calculate dimensions to fit in PDF
       const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth() - 80; // margins
+      const pdfWidth = pdf.internal.pageSize.getWidth() - 80;
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      // Add image to PDF
       pdf.addImage(imgData, 'PNG', 40, 105, pdfWidth, pdfHeight);
       
-      // Save the PDF
       pdf.save(`tableau-workbooks-${projectName.replace(/\s+/g, '-')}-${timestamp}.pdf`);
       
       toast({
@@ -734,7 +702,6 @@ const WorkbooksPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
           <Button variant="link" className="p-0 h-auto" asChild>
             <Link to="/">Home</Link>
@@ -747,7 +714,6 @@ const WorkbooksPage: React.FC = () => {
           <span className="font-medium text-foreground">Workbooks</span>
         </div>
         
-        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
           <div>
             <h1 className="text-3xl font-bold text-foreground">
@@ -769,9 +735,7 @@ const WorkbooksPage: React.FC = () => {
           </Button>
         </div>
 
-        {/* Filters and Search Bar */}
         <div className="space-y-4">
-          {/* Project Filter Panel */}
           <div className="flex items-center gap-4">
             <div className="relative" ref={filterRef}>
               <Button
@@ -793,7 +757,6 @@ const WorkbooksPage: React.FC = () => {
                 <Filter className="h-4 w-4 text-muted-foreground" />
               </Button>
               
-              {/* Project Filter Dropdown */}
               {showProjectFilter && !isLoadingProjects && (
                 <div className="absolute top-full mt-2 left-0 w-full min-w-[300px] bg-background border rounded-lg shadow-lg z-50">
                   <div className="p-2">
@@ -830,7 +793,6 @@ const WorkbooksPage: React.FC = () => {
               )}
             </div>
 
-            {/* Clear Filter */}
             {selectedProject !== 'all' && (
               <Button
                 variant="ghost"
@@ -843,7 +805,6 @@ const WorkbooksPage: React.FC = () => {
               </Button>
             )}
 
-            {/* Refresh Button */}
             <Button
               size="icon"
               variant="outline"
@@ -854,7 +815,6 @@ const WorkbooksPage: React.FC = () => {
             </Button>
           </div>
 
-          {/* Search Bar */}
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
@@ -866,7 +826,6 @@ const WorkbooksPage: React.FC = () => {
             />
           </div>
           
-          {/* Results Count */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {filteredWorkbooks.length} workbook(s) found
@@ -882,9 +841,7 @@ const WorkbooksPage: React.FC = () => {
           </div>
         </div>
         
-        {/* Main Content - Equal sized columns */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Workbooks List */}
           <div ref={workbooksContainerRef}>
             <Card className="shadow-md h-full">
               <CardHeader>
@@ -931,7 +888,6 @@ const WorkbooksPage: React.FC = () => {
                             </div>
                           </div>
                           
-                          {/* Add navigation buttons */}
                           {selectedWorkbook?.id === workbook.id && (
                             <div className="mt-4 pt-3 border-t flex flex-wrap gap-2">
                               <Button 
@@ -996,7 +952,6 @@ const WorkbooksPage: React.FC = () => {
             </Card>
           </div>
 
-          {/* Workbook Details - Same size as workbooks */}
           <div>
             <Card className="shadow-md h-full">
               <CardHeader>
@@ -1040,7 +995,6 @@ const WorkbooksPage: React.FC = () => {
 
                       <Separator />
 
-                      {/* Basic Information */}
                       <div>
                         <h4 className="font-medium text-sm mb-3">Basic Information</h4>
                         <div className="space-y-3 text-sm">
@@ -1069,7 +1023,6 @@ const WorkbooksPage: React.FC = () => {
 
                       <Separator />
 
-                      {/* Project Information */}
                       <div>
                         <h4 className="font-medium text-sm mb-3">Project Information</h4>
                         <div className="space-y-3 text-sm">
@@ -1086,7 +1039,6 @@ const WorkbooksPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Technical Details */}
                       {workbookDetails.webpage_url && (
                         <>
                           <Separator />
@@ -1112,7 +1064,6 @@ const WorkbooksPage: React.FC = () => {
                         </>
                       )}
 
-                      {/* Tags */}
                       {workbookDetails.tags && workbookDetails.tags.length > 0 && (
                         <>
                           <Separator />
@@ -1144,7 +1095,6 @@ const WorkbooksPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Migration Dialog */}
       <Dialog open={showMigrateDialog} onOpenChange={setShowMigrateDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -1215,7 +1165,6 @@ const WorkbooksPage: React.FC = () => {
           ) : (
             <>
               <div className="space-y-4 py-4">
-                {/* Progress Bar */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Progress</span>
@@ -1224,7 +1173,6 @@ const WorkbooksPage: React.FC = () => {
                   <Progress value={migrationProgress} className="h-2" />
                 </div>
                 
-                {/* Migration Status Steps */}
                 <div className="space-y-3 mt-6">
                   {migrationStatuses.map((status, index) => (
                     <div key={index} className="flex items-start gap-3">

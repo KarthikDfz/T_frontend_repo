@@ -44,12 +44,7 @@ const navigationItems = [
     title: "Projects",
     url: "/projects",
     icon: FolderTree,
-  },
-  {
-    title: "Migration History",
-    url: "/history",
-    icon: History,
-  },
+  }
 ];
 
 const contentItems = [
@@ -63,16 +58,16 @@ const contentItems = [
     url: "/dashboards",
     icon: BarChart3,
   }, 
-  {
-    title: "Custom Calculations",
-    url: "/customcalculation",
-    icon: Calculator,
-  },
-  {
-    title: "Views/Sheets",
-    url: "/sheets",
-    icon: FileText,
-  },
+  // {
+  //   title: "Custom Calculations",
+  //   url: "/customcalculation",
+  //   icon: Calculator,
+  // },
+  // {
+  //   title: "Views/Sheets",
+  //   url: "/sheets",
+  //   icon: FileText,
+  // },
   {
     title: "Data Sources",
     url: "/datasources",
@@ -259,7 +254,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Migration Tools Section */}
-        <SidebarGroup>
+        {/* <SidebarGroup>
           <Collapsible open={openSections.tools} onOpenChange={() => toggleSection('tools')}>
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md px-2 py-1">
@@ -284,10 +279,10 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </CollapsibleContent>
           </Collapsible>
-        </SidebarGroup>
+        </SidebarGroup> */}
 
         {/* Configuration Section */}
-        <SidebarGroup>
+        {/* <SidebarGroup>
           <Collapsible open={openSections.settings} onOpenChange={() => toggleSection('settings')}>
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md px-2 py-1">
@@ -312,7 +307,7 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </CollapsibleContent>
           </Collapsible>
-        </SidebarGroup>
+        </SidebarGroup> */}
       </SidebarContent>
     </Sidebar>
   );
